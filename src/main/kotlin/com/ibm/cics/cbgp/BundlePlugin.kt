@@ -35,6 +35,7 @@ class BundlePlugin : Plugin<Project> {
 		const val EAR_METHOD_NAME = "cicsBundleEar"
 		const val EBA_METHOD_NAME = "cicsBundleEba"
 		const val CICS_BUNDLE_USAGE = "cicsBundle"
+		const val UPLOAD_WAR_TASK_NAME = "uploadWarToLiberty"
 	}
 
 	override fun apply(project: Project) {
@@ -70,7 +71,12 @@ class BundlePlugin : Plugin<Project> {
 			this.group = BasePlugin.BUILD_GROUP
 		}
 
-
+		// Define upload WAR to Liberty task
+		val uploadWarTaskProvider = project.tasks.register(UPLOAD_WAR_TASK_NAME, UploadWarToLibertyTask::class.java) {
+		    this.description = "Uploads a WAR file directly to a Liberty server endpoint."
+		    this.group = "upload"
+		}
+		
 		project.configurations.create("cicsBundle") {
 			isCanBeConsumed = true
 			isCanBeResolved = false
@@ -112,6 +118,73 @@ class BundlePlugin : Plugin<Project> {
 			deployTaskProvider.configure {
 				// Wire output of package task to input of deploy task, by default
 				inputFile.set(packageTaskProvider.flatMap { it.archiveFile })
+			}
+			
+			uploadWarTaskProvider.configure {
+			    configureWarFileSource(project, this)
+			}
+		}
+	}
+
+	/**
+		* Configures the WAR file source for the upload task.
+		* Attempts to find WAR file from current project or dependencies.
+		*/
+	private fun configureWarFileSource(project: Project, uploadTask: UploadWarToLibertyTask) {
+		// First, try to find WAR task in current project
+		val warTask = project.tasks.findByName("war")
+		if (warTask != null) {
+			configureWarFromCurrentProject(uploadTask, warTask)
+		} else {
+			// If no WAR task in current project, look for WAR in cicsBundlePart dependencies
+			configureWarFromDependencies(project, uploadTask)
+		}
+	}
+
+	/**
+		* Configures WAR file from the current project's WAR task.
+		*/
+	private fun configureWarFromCurrentProject(uploadTask: UploadWarToLibertyTask, warTask: org.gradle.api.Task) {
+		uploadTask.warFile.set(warTask.outputs.files.singleFile)
+		uploadTask.dependsOn(warTask)
+	}
+
+	/**
+		* Configures WAR file from cicsBundlePart dependencies.
+		*/
+	private fun configureWarFromDependencies(project: Project, uploadTask: UploadWarToLibertyTask) {
+		val bundlePartConfig = project.configurations.findByName(BUNDLE_DEPENDENCY_CONFIGURATION_NAME)
+			?: return
+
+		val warFiles = findWarFilesInConfiguration(bundlePartConfig)
+		if (warFiles.isEmpty()) {
+			return
+		}
+
+		uploadTask.warFile.set(warFiles.first().file)
+		addDependencyProjectWarTasks(bundlePartConfig, uploadTask)
+	}
+
+	/**
+		* Finds all WAR files in the given configuration.
+		*/
+	private fun findWarFilesInConfiguration(configuration: org.gradle.api.artifacts.Configuration) =
+		configuration.resolvedConfiguration.resolvedArtifacts
+			.filter { it.file.extension == "war" }
+
+	/**
+		* Adds dependencies on WAR tasks from dependency projects.
+		*/
+	private fun addDependencyProjectWarTasks(
+		configuration: org.gradle.api.artifacts.Configuration,
+		uploadTask: UploadWarToLibertyTask
+	) {
+		configuration.dependencies.forEach { dep ->
+			if (dep is org.gradle.api.internal.artifacts.dependencies.DefaultProjectDependency) {
+				val depWarTask = dep.dependencyProject.tasks.findByName("war")
+				if (depWarTask != null) {
+					uploadTask.dependsOn(depWarTask)
+				}
 			}
 		}
 	}
