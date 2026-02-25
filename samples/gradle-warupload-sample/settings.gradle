@@ -1,0 +1,16 @@
+pluginManagement {
+    repositories {
+    	mavenCentral()
+        gradlePluginPortal() // Needed for the plugin's own dependencies.
+        //mavenLocal() //enable this to test a local version published using publishToMavenLocal goal
+        //uncomment lines below to use Sonatype snapshots
+        //maven {
+        //  name = "SonatypeSnapshots"
+        //  url = uri("https://central.sonatype.com/repository/maven-snapshots")
+        //}
+    }
+}
+
+rootProject.name = 'gradle-warupload-sample'
+include 'standalone-warupload-demo'
+

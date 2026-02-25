@@ -1,0 +1,41 @@
+plugins {
+    id 'com.ibm.cics.bundle' version '1.0.8'
+    id 'war'
+}
+
+group 'com.ibm.cics'
+version '1.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+// ============================================================================
+// WAR Configuration
+// ============================================================================
+war {
+    archiveFileName = 'standalone-warupload-demo.war'
+}
+
+repositories {
+    mavenCentral()
+}
+
+cicsBundle {
+    libertyWarUpload {
+        serverUrl = 'http://<host>:<port>/com.ibm.cics.wlp.warupload/uploadApp'
+        appId = '<applicationId>'
+        contextRoot = '/uploadApp'
+        roleName = 'User'
+        username = project.cicsUser    // Define cicsUser in gradle.properties file
+        password = project.cicsPass   // Define cicsPass in gradle.properties file
+    }
+}
+
+dependencies {
+    testImplementation group: 'junit', name: 'junit', version: '4.13.2'
+    compileOnly 'jakarta.servlet:jakarta.servlet-api:6.0.0'
+    compileOnly 'com.ibm.cics:com.ibm.cics.server:1.800.1-5.6-PH34012'
+    compileOnly 'jakarta.annotation:jakarta.annotation-api:2.1.1'
+}
