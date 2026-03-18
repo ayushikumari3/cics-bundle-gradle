@@ -28,8 +28,9 @@ cicsBundle {
         appId = '<applicationId>'
         contextRoot = '/uploadApp'
         roleName = 'User'
-        username = project.cicsUser    // Define cicsUser in gradle.properties file
-        password = project.cicsPass   // Define cicsPass in gradle.properties file
+        userName = cicsUser // Define cicsUser in gradle.properties file
+        password = cicsPass // Define cicsPass in gradle.properties file
+        bearerToken = token // Define token in gradle.properties file
     }
 }
 

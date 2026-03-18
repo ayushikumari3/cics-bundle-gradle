@@ -39,12 +39,17 @@ open class LibertyWarUploadExtension {
     var roleName = "User"
     
     /**
-     * Username for authentication
+     * Username for Basic Authentication (optional if using JWT token)
      */
     var userName = ""
     
     /**
-     * Password for authentication
+     * Password for Basic Authentication (optional if using JWT token)
      */
     var password = ""
+    
+    /**
+     * JWT Bearer token for authentication (alternative to userName/password)
+     */
+    var bearerToken = ""
 }

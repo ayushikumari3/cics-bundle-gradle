@@ -54,12 +54,12 @@ open class UploadWarToLibertyTask : DefaultTask() {
         private const val MISSING_SERVER_URL = "Specify serverUrl for Liberty WAR upload"
         private const val MISSING_APP_ID = "Specify appId for Liberty WAR upload"
         private const val MISSING_CONTEXT_ROOT = "Specify contextRoot for Liberty WAR upload"
-        private const val MISSING_USER_NAME = "Specify userName for Liberty WAR upload"
-        private const val MISSING_PASSWORD = "Specify password for Liberty WAR upload"
+        private const val MISSING_AUTH = "Specify either userName/password for Basic Auth OR bearerToken for JWT authentication"
 
         private val UPLOAD_CONFIG_EXCEPTION = """
             Please specify Liberty WAR upload configuration in build.gradle.
-            Example:
+            
+            Example with Basic Authentication:
                 ${BundlePlugin.BUNDLE_EXTENSION_NAME} {
                     libertyWarUpload {
                         serverUrl = 'http://localhost:9080/uploadApp'
@@ -70,7 +70,17 @@ open class UploadWarToLibertyTask : DefaultTask() {
                         password = 'password'
                     }
                 }
-            All items must be completed.
+            
+            Example with JWT Token:
+                ${BundlePlugin.BUNDLE_EXTENSION_NAME} {
+                    libertyWarUpload {
+                        serverUrl = 'http://localhost:9080/uploadApp'
+                        appId = 'myapp'
+                        contextRoot = 'myapp'
+                        roleName = 'User'
+                        bearerToken = 'your-jwt-token'
+                    }
+                }
             """.trimIndent()
     }
 
@@ -94,10 +104,16 @@ open class UploadWarToLibertyTask : DefaultTask() {
     val roleName = bundleExtension.libertyWarUpload.roleName
     
     @Input
+    @Optional
     val userName = bundleExtension.libertyWarUpload.userName
     
     @Input
+    @Optional
     val password = bundleExtension.libertyWarUpload.password
+    
+    @Input
+    @Optional
+    val bearerToken = bundleExtension.libertyWarUpload.bearerToken
 
     @InputFile
     val warFile: RegularFileProperty = project.objects.fileProperty()
@@ -276,13 +292,12 @@ open class UploadWarToLibertyTask : DefaultTask() {
             return baseUrl
         }
         
-        // Otherwise, add parameters
+        // Otherwise, add parameters (userName is extracted from auth header on server side)
         val separator = if (baseUrl.contains("?")) "&" else "?"
         val params = listOf(
             "appId=${urlEncode(appId)}",
             "contextRoot=${urlEncode(contextRoot)}",
-            "roleName=${urlEncode(roleName)}",
-            "userName=${urlEncode(userName)}"
+            "roleName=${urlEncode(roleName)}"
         ).joinToString("&")
         
         return "$baseUrl$separator$params"
@@ -305,13 +320,25 @@ open class UploadWarToLibertyTask : DefaultTask() {
     }
 
     /**
-     * Adds HTTP Basic Authentication header to connection.
+     * Adds authentication header to connection (Basic Auth or Bearer Token).
      */
     private fun addBasicAuthentication(connection: HttpURLConnection) {
-        if (userName.isNotEmpty() && password.isNotEmpty()) {
-            val credentials = "$userName:$password"
-            val encodedCredentials = Base64.getEncoder().encodeToString(credentials.toByteArray(Charsets.UTF_8))
-            connection.setRequestProperty("Authorization", "Basic $encodedCredentials")
+        when {
+            bearerToken.isNotEmpty() -> {
+                // Use JWT Bearer token
+                connection.setRequestProperty("Authorization", "Bearer $bearerToken")
+                logger.lifecycle("Using JWT Bearer token authentication")
+            }
+            userName.isNotEmpty() && password.isNotEmpty() -> {
+                // Use Basic Authentication
+                val credentials = "$userName:$password"
+                val encodedCredentials = Base64.getEncoder().encodeToString(credentials.toByteArray(Charsets.UTF_8))
+                connection.setRequestProperty("Authorization", "Basic $encodedCredentials")
+                logger.lifecycle("Using Basic Authentication")
+            }
+            else -> {
+                logger.warn("No authentication credentials provided")
+            }
         }
     }
 
@@ -358,8 +385,18 @@ open class UploadWarToLibertyTask : DefaultTask() {
         if (serverUrl.isEmpty()) errors.add(MISSING_SERVER_URL)
         if (appId.isEmpty()) errors.add(MISSING_APP_ID)
         if (contextRoot.isEmpty()) errors.add(MISSING_CONTEXT_ROOT)
-        if (userName.isEmpty()) errors.add(MISSING_USER_NAME)
-        if (password.isEmpty()) errors.add(MISSING_PASSWORD)
+        
+        // Validate authentication: either Basic Auth (userName + password) OR Bearer Token
+        val hasBasicAuth = userName.isNotEmpty() && password.isNotEmpty()
+        val hasBearerToken = bearerToken.isNotEmpty()
+        
+        if (!hasBasicAuth && !hasBearerToken) {
+            errors.add(MISSING_AUTH)
+        }
+        
+        if (hasBasicAuth && hasBearerToken) {
+            logger.warn("Both Basic Auth and Bearer Token provided. Bearer Token will be used.")
+        }
 
         if (errors.isNotEmpty()) {
             errors.forEach { logger.error(it) }
