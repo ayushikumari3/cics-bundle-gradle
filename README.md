@@ -336,6 +336,10 @@ Use of this plugin will vary depending on what you’re starting with and the st
 This sample is the quickest way to try the plugin out if you don't already have a Gradle project. It shows how to configure a multi-part Gradle project to build and deploy a CICS bundle, with a separate module to contain bundle configurations. The sample has a parent Gradle project that contains a local and a remote JAVA project as child modules. It also contains a CICS child module that wraps the other two modules into a CICS bundle and deploys the built bundle to CICS. A `README` is included in the sample with detailed instructions.
 
 [Standalone project sample (`gradle-war-sample`)](https://github.com/IBM/cics-bundle-gradle/tree/main/samples/gradle-war-sample)  
+
+[WAR Upload sample (`gradle-warupload-sample`)](https://github.com/IBM/cics-bundle-gradle/tree/main/samples/gradle-warupload-sample)  
+This sample demonstrates how to upload a WAR file directly to a Liberty server endpoint, bypassing CICS bundle creation. It shows how to configure the `libertyWarUpload` extension and use the `uploadWarToLiberty` task for direct deployment to Liberty using the WAR upload REST API. A `README` is included in the sample with detailed instructions.
+
 If you already have a Gradle module and want to add extra configuration to it for quick use of the plugin, check out this sample. It shows you how to configure an existing WAR project to build a CICS bundle. You can either copy and paste the configuration to your WAR project or import the full sample to see how it works. A `README` is included in the sample with detailed instructions.
 
 ## Troubleshooting
