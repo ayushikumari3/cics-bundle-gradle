@@ -12,6 +12,7 @@ The table of contents is manually created and relies on the wording of the headi
   - [Gradle tasks](#gradle-tasks)
   - [Configure the plugin](#configure-the-cics-bundle-gradle-plugin)
   - [Build and package a CICS bundle](#build-and-package-a-cics-bundle)
+  - [Upload a WAR directly to Liberty](#upload-a-war-directly-to-liberty)
   - [Deploy a CICS bundle](#deploy-a-cics-bundle)
   - [Advanced configuration](#advanced-configuration)
   - [Samples](#samples)
@@ -209,6 +210,80 @@ The username defined in the pom.xml is the developer’s credentials which need 
     ./gradlew deployCICSBundle
     ```  
     If you run into an `unable to find valid certification path to requested target` error during deployment, see [Troubleshooting](#troubleshooting) for a fix.
+
+## Upload a WAR directly to Liberty
+
+The CICS bundle Gradle plugin provides a task to upload WAR files directly to a Liberty server endpoint, bypassing CICS bundle creation. This approach uses the Liberty WAR upload REST API for direct deployment.
+
+### Prerequisites for WAR Upload
+
+- Liberty server with WAR upload feature enabled and configured
+- Liberty server URL endpoint (e.g., `http://server:port/com.ibm.cics.wlp.appdeploy/uploadApp`)
+- Valid credentials (username/password or JWT Bearer token) with appropriate permissions
+- Application ID and context root for your application
+
+### Configure WAR Upload
+
+Add the `libertyWarUpload` configuration to your WAR project's `build.gradle`:
+
+```gradle
+plugins {
+    id 'com.ibm.cics.bundle' version '1.0.8'
+    id 'war'
+}
+
+cicsBundle {
+    libertyWarUpload {
+        serverUrl = 'http://your-server:port/com.ibm.cics.wlp.appdeploy/uploadApp'
+        appId = 'your-app-id'
+        contextRoot = '/your-context-root'
+        roleName = 'User'
+        // Use Basic Authentication
+        userName = project.findProperty('cicsUser') ?: ''
+        password = project.findProperty('cicsPassword') ?: ''
+        // OR use JWT Bearer Token
+        // bearerToken = project.findProperty('cicsToken') ?: ''
+    }
+}
+```
+
+### Upload the WAR
+
+Run the following command to build and upload your WAR:
+
+```bash
+./gradlew uploadWarToLiberty
+```
+
+Or pass credentials via command line:
+
+```bash
+./gradlew uploadWarToLiberty -PcicsUser=username -PcicsPassword=password
+```
+
+The upload task will:
+- Build the WAR file (if not already built)
+- Upload it to the configured Liberty server endpoint
+- Handle HTTP redirects automatically
+- Retry on failure (up to 3 attempts with exponential backoff)
+- Display upload progress and server response
+
+### Configuration Options
+
+| Property | Required | Description | Example |
+|----------|----------|-------------|---------|
+| `serverUrl` | Yes | Liberty server upload endpoint | `http://server:9080/uploadApp` |
+| `appId` | Yes | Application identifier | `myapp` |
+| `contextRoot` | Yes | Application context root | `/myapp` |
+| `roleName` | No | Security role name (default: "User") | `User` |
+| `userName` | Conditional* | Authentication username | `admin` |
+| `password` | Conditional* | Authentication password | `password` |
+| `bearerToken` | Conditional* | JWT Bearer token | `eyJhbGc...` |
+
+*Either `userName`/`password` OR `bearerToken` must be provided.
+
+See the [WAR Upload sample](https://github.com/IBM/cics-bundle-gradle/tree/main/samples/gradle-warupload-sample) for a complete working example.
+
 
 ## Advanced configuration
 When adding Java-based bundle parts to your CICS bundle, the following defaults will be used:
