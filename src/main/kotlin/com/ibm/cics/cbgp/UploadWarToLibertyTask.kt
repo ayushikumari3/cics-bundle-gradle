@@ -28,7 +28,7 @@ import java.net.URLEncoder
 import java.util.Base64
 
 /**
- * Gradle task that uploads a WAR file to Liberty server using HTTP multipart upload.
+ * Gradle task that uploads a WAR file to Liberty server using HTTP chunked transfer encoding.
  * Uses streaming to handle large files without loading entire file into memory.
  */
 open class UploadWarToLibertyTask : DefaultTask() {
@@ -180,23 +180,21 @@ open class UploadWarToLibertyTask : DefaultTask() {
     }
 
     /**
-     * Uploads WAR file using multipart/form-data with streaming.
+     * Uploads WAR file using HTTP chunked transfer encoding with raw binary stream.
      * Handles HTTP redirects manually for POST requests.
      */
     private fun uploadWarFile(war: File) {
-        
-        val boundary = "----WebKitFormBoundary${System.currentTimeMillis()}"
         val urlWithParams = buildUrlWithParams(serverUrl)
         
-        var connection = createConnection(urlWithParams, boundary)
-        uploadMultipartData(connection, war, boundary)
+        var connection = createConnection(urlWithParams)
+        streamWarFile(connection, war)
         
         var responseCode = connection.responseCode
         logger.lifecycle("Response: $responseCode - ${connection.responseMessage}")
         
         // Handle HTTP redirects manually for POST with body
         if (responseCode in REDIRECT_STATUS_CODES) {
-            connection = handleRedirect(connection, war, boundary)
+            connection = handleRedirect(connection, war)
             responseCode = connection.responseCode
         }
         
@@ -205,60 +203,38 @@ open class UploadWarToLibertyTask : DefaultTask() {
     }
 
     /**
-     * Uploads multipart form data with the WAR file.
-     * Streams the file in 8KB chunks to avoid loading entire file into memory.
-     */
-    private fun uploadMultipartData(connection: HttpURLConnection, war: File, boundary: String) {
-        connection.outputStream.use { outputStream ->
-            writeMultipartHeader(outputStream, war, boundary)
-            streamFileContent(outputStream, war)
-            writeMultipartFooter(outputStream, boundary)
-        }
-    }
-
-    /**
-     * Writes the multipart form header.
-     */
-    private fun writeMultipartHeader(outputStream: OutputStream, war: File, boundary: String) {
-        val writer = PrintWriter(OutputStreamWriter(outputStream, "UTF-8"), true)
-        writer.append("--$boundary\r\n")
-        writer.append("Content-Disposition: form-data; name=\"warFile\"; filename=\"${war.name}\"\r\n")
-        writer.append("Content-Type: application/octet-stream\r\n")
-        writer.append("\r\n")
-        writer.flush()
-    }
-
-    /**
-     * Streams file content in chunks with progress logging.
+     * Streams WAR file content directly using chunked transfer encoding.
      * Uses 8KB buffer to read and write file data efficiently.
      */
-    private fun streamFileContent(outputStream: OutputStream, war: File) {
-        FileInputStream(war).use { fileInput ->
-            val buffer = ByteArray(BUFFER_SIZE)
-            var bytesRead: Int
-            var totalBytes = 0L
-            
-            while (fileInput.read(buffer).also { bytesRead = it } != -1) {
-                outputStream.write(buffer, 0, bytesRead)
-                totalBytes += bytesRead
+    private fun streamWarFile(connection: HttpURLConnection, war: File) {
+        connection.outputStream.use { outputStream ->
+            FileInputStream(war).use { fileInput ->
+                val buffer = ByteArray(BUFFER_SIZE)
+                var bytesRead: Int
+                var totalBytes = 0L
+                var lastLoggedMB = 0L
                 
+                while (fileInput.read(buffer).also { bytesRead = it } != -1) {
+                    outputStream.write(buffer, 0, bytesRead)
+                    totalBytes += bytesRead
+                    
+                    // Log progress every 100MB for large files
+                    val currentMB = totalBytes / (1024 * 1024)
+                    if (currentMB - lastLoggedMB >= 100) {
+                        logger.lifecycle("Uploaded: ${currentMB}MB")
+                        lastLoggedMB = currentMB
+                    }
+                }
+                
+                logger.lifecycle("Total uploaded: %.2f MB".format(totalBytes / (1024.0 * 1024.0)))
             }
         }
     }
 
     /**
-     * Writes the multipart form footer.
-     */
-    private fun writeMultipartFooter(outputStream: OutputStream, boundary: String) {
-        val writer = PrintWriter(OutputStreamWriter(outputStream, "UTF-8"), true)
-        writer.append("\r\n--$boundary--\r\n")
-        writer.flush()
-    }
-
-    /**
      * Handles HTTP redirect by creating new connection and re-uploading.
      */
-    private fun handleRedirect(originalConnection: HttpURLConnection, war: File, boundary: String): HttpURLConnection {
+    private fun handleRedirect(originalConnection: HttpURLConnection, war: File): HttpURLConnection {
         val redirectUrl = originalConnection.getHeaderField("Location")
             ?: throw GradleException("Redirect response missing Location header")
         
@@ -266,8 +242,8 @@ open class UploadWarToLibertyTask : DefaultTask() {
         originalConnection.disconnect()
         
         val redirectUrlWithParams = buildUrlWithParams(redirectUrl)
-        val newConnection = createConnection(redirectUrlWithParams, boundary)
-        uploadMultipartData(newConnection, war, boundary)
+        val newConnection = createConnection(redirectUrlWithParams)
+        streamWarFile(newConnection, war)
         
         logger.lifecycle("Redirect response: ${newConnection.responseCode} - ${newConnection.responseMessage}")
         return newConnection
@@ -304,15 +280,16 @@ open class UploadWarToLibertyTask : DefaultTask() {
     }
 
     /**
-     * Creates HTTP connection with multipart headers and authentication.
+     * Creates HTTP connection with chunked transfer encoding and authentication.
      */
-    private fun createConnection(url: String, boundary: String): HttpURLConnection {
+    private fun createConnection(url: String): HttpURLConnection {
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.requestMethod = "POST"
         connection.doOutput = true
         connection.instanceFollowRedirects = false  // Handle redirects manually for POST
-        connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+        connection.setRequestProperty("Content-Type", "application/octet-stream")
         connection.setRequestProperty("Transfer-Encoding", "chunked")
+        connection.setChunkedStreamingMode(BUFFER_SIZE)  // Enable chunked streaming
         
         addBasicAuthentication(connection)
         
