@@ -220,14 +220,15 @@ The CICS bundle Gradle plugin provides a task to upload WAR files directly to a 
 - Liberty server with WAR upload feature enabled and configured
 - Liberty server URL endpoint (e.g., `http://server:port/com.ibm.cics.wlp.appdeploy/uploadApp`)
 - Valid credentials (username/password or JWT Bearer token) with appropriate permissions
-- Application ID and context root for your application
+- Liberty upload endpoint and caller-supplied `<application ...>` XML
 
 **Note:** The upload uses HTTP chunked transfer encoding, which allows uploading WAR files of any size. Files are streamed in 8KB chunks to avoid loading the entire file into memory.
 
 ### Configure WAR Upload
 
-Add the `libertyWarUpload` configuration to your WAR project's `build.gradle`:
+Add the `libertyWarUpload` configuration to your WAR project's `build.gradle`.
 
+Inline XML example:
 ```gradle
 plugins {
     id 'com.ibm.cics.bundle' version '1.0.8'
@@ -236,10 +237,8 @@ plugins {
 
 cicsBundle {
     libertyWarUpload {
-        serverUrl = 'http://your-server:port/com.ibm.cics.wlp.appdeploy/uploadApp'
-        appId = 'your-app-id'
-        contextRoot = '/your-context-root'
-        roleName = 'User'
+        serverUrl = 'https://your-server:port/com.ibm.cics.wlp.appdeploy/uploadApp'
+        applicationXml = '<application id="your-app-id" location="your-app-id.war" type="war"><context-root>your-context-root</context-root></application>'
         // Use Basic Authentication
         userName = project.findProperty('cicsUser') ?: ''
         password = project.findProperty('cicsPassword') ?: ''
@@ -248,6 +247,22 @@ cicsBundle {
     }
 }
 ```
+
+File-based XML example:
+```gradle
+cicsBundle {
+    libertyWarUpload {
+        serverUrl = 'https://your-server:port/com.ibm.cics.wlp.appdeploy/uploadApp'
+        applicationXmlLocation = 'src/main/resources/application.xml'
+        userName = project.findProperty('cicsUser') ?: ''
+        password = project.findProperty('cicsPassword') ?: ''
+        // OR use JWT Bearer Token
+        // bearerToken = project.findProperty('cicsToken') ?: ''
+    }
+}
+```
+
+If both `applicationXml` and `applicationXmlLocation` are configured, inline `applicationXml` takes precedence.
 
 ### Upload the WAR
 
@@ -265,7 +280,9 @@ Or pass credentials via command line:
 
 The upload task will:
 - Build the WAR file (if not already built)
-- Upload it to the configured Liberty server endpoint using HTTP chunked transfer encoding
+- Resolve Liberty `<application ...>` XML from inline configuration or a file
+- Upload the WAR to the configured Liberty server endpoint using HTTP chunked transfer encoding
+- Send `applicationXml` as a URL-encoded request parameter
 - Display upload progress every 100MB for large files
 - Handle HTTP redirects automatically
 - Retry on failure (up to 3 attempts with exponential backoff)
@@ -275,15 +292,15 @@ The upload task will:
 
 | Property | Required | Description | Example |
 |----------|----------|-------------|---------|
-| `serverUrl` | Yes | Liberty server upload endpoint | `http://server:9080/uploadApp` |
-| `appId` | Yes | Application identifier | `myapp` |
-| `contextRoot` | Yes | Application context root | `/myapp` |
-| `roleName` | No | Security role name (default: "User") | `User` |
+| `serverUrl` | Yes | Liberty server upload endpoint | `https://your-server:port/com.ibm.cics.wlp.appdeploy/uploadApp` |
+| `applicationXml` | Conditional** | Full Liberty `<application ...>` XML sent inline | `<application id="myapp" ...>` |
+| `applicationXmlLocation` | Conditional** | Path to a file containing Liberty `<application ...>` XML | `src/main/resources/application.xml` |
 | `userName` | Conditional* | Authentication username | `admin` |
 | `password` | Conditional* | Authentication password | `password` |
 | `bearerToken` | Conditional* | JWT Bearer token | `eyJhbGc...` |
 
 *Either `userName`/`password` OR `bearerToken` must be provided.
+**Either `applicationXml` or `applicationXmlLocation` must be provided. If both are set, inline `applicationXml` takes precedence.
 
 See the [WAR Upload sample](https://github.com/IBM/cics-bundle-gradle/tree/main/samples/gradle-warupload-sample) for a complete working example.
 

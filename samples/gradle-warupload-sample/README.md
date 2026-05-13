@@ -1,19 +1,21 @@
 # Standalone WAR Upload Sample (gradle-warupload-sample)
-This sample demonstrates how to upload a WAR file directly to a Liberty server endpoint using the CICS Bundle Gradle Plugin's WAR upload feature. This approach deploys WARs directly to Liberty using the WAR upload REST API.
+This sample demonstrates how to upload a WAR file directly to a Liberty server endpoint using the CICS Bundle Gradle Plugin's WAR upload feature. This approach deploys WARs directly to Liberty using the WAR upload REST API and a caller-supplied Liberty `<application>` definition.
 
 ## Key Features
 - Direct WAR upload to Liberty server (no CICS bundle required)
-- HTTP multipart file upload with streaming (handles large files efficiently)
+- Raw `application/octet-stream` WAR upload with streaming
+- Inline `applicationXml` sample configuration by default
+- Optional file-based `applicationXmlLocation` support
 - Automatic retry with exponential backoff
 - HTTP redirect handling
-- Basic authentication support
+- Basic authentication or JWT Bearer token support
 - Progress logging
 
 ## Prerequisites
 Ensure your Liberty server has the WAR upload feature enabled and configured. You'll need:
-- The Liberty server URL endpoint (e.g., `http://server:port/com.ibm.cics.wlp.warupload/uploadApp`)
-- Valid credentials (username and password) with appropriate permissions
-- Application ID and context root for your application
+- The Liberty server URL endpoint (e.g., `https://your-server:port/com.ibm.cics.wlp.appdeploy/uploadApp`)
+- Valid credentials (username/password or JWT Bearer token) with appropriate permissions
+- A Liberty `<application ...>` definition, provided inline or from a file
 
 ## Using the Sample
 
@@ -25,12 +27,13 @@ Ensure your Liberty server has the WAR upload feature enabled and configured. Yo
 ```gradle
 cicsBundle {
     libertyWarUpload {
-        serverUrl = 'http://your-server:port/com.ibm.cics.wlp.warupload/uploadApp'
-        appId = 'your-app-id'
-        contextRoot = '/your-context-root'
-        roleName = 'User'
-        userName = 'your-username'
-        password = 'your-password'
+        serverUrl = project.findProperty('cicsServerUrl') ?: 'https://your-server:port/com.ibm.cics.wlp.appdeploy/uploadApp'
+        userName = project.findProperty('cicsUser') ?: ''
+        password = project.findProperty('cicsPassword') ?: ''
+        // bearerToken = project.findProperty('cicsToken') ?: ''
+
+        applicationXml = '<application id="standalone-warupload-demo" location="standalone-warupload-demo.war" type="war"><context-root>standalone-warupload</context-root></application>'
+        // applicationXmlLocation = 'src/main/resources/application.xml'
     }
 }
 ```
@@ -51,12 +54,13 @@ java {
 
 cicsBundle {
     libertyWarUpload {
-        serverUrl = 'http://your-server:port/com.ibm.cics.wlp.warupload/uploadApp'
-        appId = 'your-app-id'
-        contextRoot = '/your-context-root'
-        roleName = 'User'
-        userName = 'your-username'
-        password = 'your-password'
+        serverUrl = project.findProperty('cicsServerUrl') ?: 'https://your-server:port/com.ibm.cics.wlp.appdeploy/uploadApp'
+        userName = project.findProperty('cicsUser') ?: ''
+        password = project.findProperty('cicsPassword') ?: ''
+        // bearerToken = project.findProperty('cicsToken') ?: ''
+
+        applicationXml = '<application id="myapp" location="myapp.war" type="war"><context-root>/myapp</context-root></application>'
+        // applicationXmlLocation = 'src/main/resources/application.xml'
     }
 }
 ```
@@ -76,20 +80,21 @@ cicsBundle {
 
 The upload task will:
 1. Build the WAR file (if not already built)
-2. Upload it to the configured Liberty server endpoint
-3. Handle HTTP redirects automatically
-4. Retry on failure (up to 3 attempts)
-5. Display upload progress and server response
+2. Resolve the Liberty `<application ...>` XML from inline configuration or a file
+3. Upload the WAR to the configured Liberty server endpoint as raw `application/octet-stream`
+4. Send `applicationXml` as a URL-encoded request parameter
+5. Handle HTTP redirects automatically
+6. Retry on failure (up to 3 attempts)
+7. Display upload progress and server response
 
 ### Example Output
 ```
 === Upload WAR to Liberty ===
-Uploading WAR file: standalone-warupload-demo-1.0.0.war
+Uploading WAR file: standalone-warupload-demo.war
 File size: 0.04 MB
-Target server: http://server:12372/com.ibm.cics.wlp.warupload/uploadApp
-Response: 302 - Found
-Following redirect to: https://server:12373/com.ibm.cics.wlp.warupload/uploadApp?appId=...
-Redirect response: 200 - OK
+Target server: https://your-server:port/com.ibm.cics.wlp.appdeploy/uploadApp
+Using Basic Authentication
+Response: 200 - OK
 Server response: Application uploaded and configured successfully.
 ✓ WAR file uploaded successfully!
 ```
@@ -98,13 +103,16 @@ Server response: Application uploaded and configured successfully.
 
 | Property | Required | Description | Example |
 |----------|----------|-------------|---------|
-| `serverUrl` | Yes | Liberty server upload endpoint | `http://server:9080/uploadApp` |
-| `appId` | Yes | Application identifier | `myapp` |
-| `contextRoot` | Yes | Application context root | `/myapp` |
-| `roleName` | No | Security role name (default: "User") | `User` |
-| `userName` | Yes | Authentication username | `admin` |
-| `password` | Yes | Authentication password | `password` |
+| `serverUrl` | Yes | Liberty server upload endpoint | `https://your-server:port/com.ibm.cics.wlp.appdeploy/uploadApp` |
+| `applicationXml` | Conditional** | Full Liberty `<application ...>` XML sent inline | `<application id="myapp" ...>` |
+| `applicationXmlLocation` | Conditional** | Path to a file containing Liberty `<application ...>` XML | `src/main/resources/application.xml` |
+| `userName` | Conditional* | Authentication username | `admin` |
+| `password` | Conditional* | Authentication password | `password` |
+| `bearerToken` | Conditional* | JWT Bearer token | `eyJhbGc...` |
 
+
+*Either `userName`/`password` OR `bearerToken` must be provided.
+**Either `applicationXml` or `applicationXmlLocation` must be provided. If both are set, inline `applicationXml` takes precedence.
 
 ## Troubleshooting
 
@@ -112,9 +120,9 @@ Server response: Application uploaded and configured successfully.
 If you encounter SSL certificate errors, ensure your Java truststore includes the Liberty server's certificate. For development/testing only, you can disable SSL verification (not recommended for production).
 
 ### Authentication Failures
-- Verify username and password are correct
+- Verify username/password or bearer token are correct
 - Ensure the user has appropriate permissions on the Liberty server
-- Check that the `roleName` matches the configured security role
+- If both Basic Auth and bearer token are configured, bearer token takes precedence
 
 ### Connection Timeouts
 - Verify the server URL is correct and accessible

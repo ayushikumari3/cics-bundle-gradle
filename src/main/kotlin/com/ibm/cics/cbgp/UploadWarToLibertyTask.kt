@@ -17,11 +17,10 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.*
+import java.io.BufferedReader
 import java.io.File
 import java.io.FileInputStream
-import java.io.OutputStream
-import java.io.OutputStreamWriter
-import java.io.PrintWriter
+import java.io.FileReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -52,8 +51,7 @@ open class UploadWarToLibertyTask : DefaultTask() {
         
         // Validation error messages
         private const val MISSING_SERVER_URL = "Specify serverUrl for Liberty WAR upload"
-        private const val MISSING_APP_ID = "Specify appId for Liberty WAR upload"
-        private const val MISSING_CONTEXT_ROOT = "Specify contextRoot for Liberty WAR upload"
+        private const val MISSING_APPLICATION_XML = "Specify applicationXml or applicationXmlLocation for Liberty WAR upload"
         private const val MISSING_AUTH = "Specify either userName/password for Basic Auth OR bearerToken for JWT authentication"
 
         private val UPLOAD_CONFIG_EXCEPTION = """
@@ -63,9 +61,7 @@ open class UploadWarToLibertyTask : DefaultTask() {
                 ${BundlePlugin.BUNDLE_EXTENSION_NAME} {
                     libertyWarUpload {
                         serverUrl = 'http://localhost:9080/uploadApp'
-                        appId = 'myapp'
-                        contextRoot = 'myapp'
-                        roleName = 'User'
+                        applicationXmlLocation = 'src/main/resources/application.xml'
                         userName = 'username'
                         password = 'password'
                     }
@@ -75,9 +71,7 @@ open class UploadWarToLibertyTask : DefaultTask() {
                 ${BundlePlugin.BUNDLE_EXTENSION_NAME} {
                     libertyWarUpload {
                         serverUrl = 'http://localhost:9080/uploadApp'
-                        appId = 'myapp'
-                        contextRoot = 'myapp'
-                        roleName = 'User'
+                        applicationXml = '<application id="myapp" location="myapp.war" type="war"><context-root>/myapp</context-root></application>'
                         bearerToken = 'your-jwt-token'
                     }
                 }
@@ -95,14 +89,13 @@ open class UploadWarToLibertyTask : DefaultTask() {
     val serverUrl = bundleExtension.libertyWarUpload.serverUrl
     
     @Input
-    val appId = bundleExtension.libertyWarUpload.appId
-    
+    @Optional
+    val applicationXml = bundleExtension.libertyWarUpload.applicationXml
+
     @Input
-    val contextRoot = bundleExtension.libertyWarUpload.contextRoot
-    
-    @Input
-    val roleName = bundleExtension.libertyWarUpload.roleName
-    
+    @Optional
+    val applicationXmlLocation = bundleExtension.libertyWarUpload.applicationXmlLocation
+
     @Input
     @Optional
     val userName = bundleExtension.libertyWarUpload.userName
@@ -184,7 +177,7 @@ open class UploadWarToLibertyTask : DefaultTask() {
      * Handles HTTP redirects manually for POST requests.
      */
     private fun uploadWarFile(war: File) {
-        val urlWithParams = buildUrlWithParams(serverUrl)
+        val urlWithParams = buildUrlWithParams(serverUrl, resolveApplicationXml())
         
         var connection = createConnection(urlWithParams)
         streamWarFile(connection, war)
@@ -241,7 +234,7 @@ open class UploadWarToLibertyTask : DefaultTask() {
         logger.lifecycle("Following redirect to: $redirectUrl")
         originalConnection.disconnect()
         
-        val redirectUrlWithParams = buildUrlWithParams(redirectUrl)
+        val redirectUrlWithParams = buildUrlWithParams(redirectUrl, resolveApplicationXml())
         val newConnection = createConnection(redirectUrlWithParams)
         streamWarFile(newConnection, war)
         
@@ -260,23 +253,15 @@ open class UploadWarToLibertyTask : DefaultTask() {
 
     /**
      * Builds URL with query parameters for Liberty upload.
-     * If URL already contains parameters (from redirect), returns as-is.
+     * If URL already contains applicationXml (from redirect), returns as-is.
      */
-    private fun buildUrlWithParams(baseUrl: String): String {
-        // If URL already has our parameters (from redirect), return as-is
-        if (baseUrl.contains("appId=")) {
+    private fun buildUrlWithParams(baseUrl: String, applicationXml: String): String {
+        if (baseUrl.contains("applicationXml=")) {
             return baseUrl
         }
-        
-        // Otherwise, add parameters (userName is extracted from auth header on server side)
+
         val separator = if (baseUrl.contains("?")) "&" else "?"
-        val params = listOf(
-            "appId=${urlEncode(appId)}",
-            "contextRoot=${urlEncode(contextRoot)}",
-            "roleName=${urlEncode(roleName)}"
-        ).joinToString("&")
-        
-        return "$baseUrl$separator$params"
+        return "$baseUrl$separator" + "applicationXml=${urlEncode(applicationXml)}"
     }
 
     /**
@@ -360,9 +345,18 @@ open class UploadWarToLibertyTask : DefaultTask() {
         val errors = mutableListOf<String>()
 
         if (serverUrl.isEmpty()) errors.add(MISSING_SERVER_URL)
-        if (appId.isEmpty()) errors.add(MISSING_APP_ID)
-        if (contextRoot.isEmpty()) errors.add(MISSING_CONTEXT_ROOT)
-        
+
+        val hasInlineApplicationXml = applicationXml.isNotBlank()
+        val hasApplicationXmlLocation = applicationXmlLocation.isNotBlank()
+
+        if (!hasInlineApplicationXml && !hasApplicationXmlLocation) {
+            errors.add(MISSING_APPLICATION_XML)
+        }
+
+        if (hasInlineApplicationXml && hasApplicationXmlLocation) {
+            logger.warn("Both applicationXml and applicationXmlLocation provided. Inline applicationXml will be used.")
+        }
+
         // Validate authentication: either Basic Auth (userName + password) OR Bearer Token
         val hasBasicAuth = userName.isNotEmpty() && password.isNotEmpty()
         val hasBearerToken = bearerToken.isNotEmpty()
@@ -379,6 +373,39 @@ open class UploadWarToLibertyTask : DefaultTask() {
             errors.forEach { logger.error(it) }
             throw GradleException(UPLOAD_CONFIG_EXCEPTION)
         }
+    }
+
+    private fun resolveApplicationXml(): String {
+        if (applicationXml.isNotBlank()) {
+            return applicationXml.trim()
+        }
+
+        var applicationXmlFile = File(applicationXmlLocation)
+        if (!applicationXmlFile.isAbsolute) {
+            applicationXmlFile = File(project.projectDir, applicationXmlLocation)
+        }
+
+        if (!applicationXmlFile.exists()) {
+            throw GradleException("applicationXmlLocation does not exist: '${applicationXmlFile.absolutePath}'")
+        }
+
+        if (!applicationXmlFile.isFile()) {
+            throw GradleException("applicationXmlLocation is not a file: '${applicationXmlFile.absolutePath}'")
+        }
+
+        val xml = StringBuilder()
+        try {
+            BufferedReader(FileReader(applicationXmlFile, Charsets.UTF_8)).use { reader ->
+                var line: String?
+                while (reader.readLine().also { line = it } != null) {
+                    xml.append(line).append('\n')
+                }
+            }
+        } catch (e: Exception) {
+            throw GradleException("Failed to read applicationXmlLocation: '${applicationXmlFile.absolutePath}'", e)
+        }
+
+        return xml.toString().trim()
     }
 }
 

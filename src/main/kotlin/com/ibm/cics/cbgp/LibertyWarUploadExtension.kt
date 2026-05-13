@@ -24,19 +24,15 @@ open class LibertyWarUploadExtension {
     var serverUrl = ""
     
     /**
-     * Application ID for the WAR deployment
+     * Full Liberty application XML to send with the WAR upload request.
+     * If both applicationXml and applicationXmlLocation are set, applicationXml takes precedence.
      */
-    var appId = ""
-    
+    var applicationXml = ""
+
     /**
-     * Context root for the deployed application
+     * File path to a Liberty application XML file to send with the WAR upload request.
      */
-    var contextRoot = ""
-    
-    /**
-     * Role name for the deployment (default: "User")
-     */
-    var roleName = "User"
+    var applicationXmlLocation = ""
     
     /**
      * Username for Basic Authentication (optional if using JWT token)

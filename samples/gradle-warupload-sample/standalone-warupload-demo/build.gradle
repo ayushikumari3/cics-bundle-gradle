@@ -24,13 +24,14 @@ repositories {
 
 cicsBundle {
     libertyWarUpload {
-        serverUrl = 'http://<host>:<port>/com.ibm.cics.wlp.warupload/uploadApp'
-        appId = '<applicationId>'
-        contextRoot = '/uploadApp'
-        roleName = 'User'
-        userName = cicsUser // Define cicsUser in gradle.properties file
-        password = cicsPass // Define cicsPass in gradle.properties file
+        serverUrl = 'https://your-server:port/com.ibm.cics.wlp.appdeploy/uploadApp'
+        //userName = cicsUser // Define cicsUser in gradle.properties file
+        //password = cicsPass // Define cicsPass in gradle.properties file
         bearerToken = token // Define token in gradle.properties file
+
+        // Inline XML takes precedence if both are supplied
+        applicationXml = '<application id="standalone-warupload-demo" location="standalone-warupload-demo.war" type="war"><context-root>/standalone-warupload</context-root></application>'
+        //applicationXmlLocation = 'src/main/resources/application.xml'
     }
 }
 

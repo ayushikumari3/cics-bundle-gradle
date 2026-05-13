@@ -1,0 +1,9 @@
+<application id="standalone-warupload-demo" location="standalone-warupload-demo.war" type="war">
+    <context-root>standalone-warupload-demo</context-root>
+    <classloader delegation="parentLast"/>
+    <application-bnd>
+        <security-role name="User">
+            <user name="IN00501"/>
+        </security-role>
+    </application-bnd>
+</application>
