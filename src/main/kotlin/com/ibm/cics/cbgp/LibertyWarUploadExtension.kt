@@ -48,4 +48,16 @@ open class LibertyWarUploadExtension {
      * JWT Bearer token for authentication (alternative to userName/password)
      */
     var bearerToken = ""
+    
+    /**
+     * Connection timeout in milliseconds (default: 30000ms = 30 seconds)
+     * Time to wait for establishing TCP connection to the server
+     */
+    var connectTimeout = 30000
+    
+    /**
+     * Read timeout in milliseconds (default: 300000ms = 5 minutes)
+     * Time to wait for server response after sending the request
+     */
+    var readTimeout = 300000
 }

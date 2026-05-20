@@ -107,6 +107,12 @@ open class UploadWarToLibertyTask : DefaultTask() {
     @Input
     @Optional
     val bearerToken = bundleExtension.libertyWarUpload.bearerToken
+    
+    @Input
+    val connectTimeout = bundleExtension.libertyWarUpload.connectTimeout
+    
+    @Input
+    val readTimeout = bundleExtension.libertyWarUpload.readTimeout
 
     @InputFile
     val warFile: RegularFileProperty = project.objects.fileProperty()
@@ -272,6 +278,13 @@ open class UploadWarToLibertyTask : DefaultTask() {
         connection.requestMethod = "POST"
         connection.doOutput = true
         connection.instanceFollowRedirects = false  // Handle redirects manually for POST
+        
+        // Set timeout configurations
+        connection.connectTimeout = connectTimeout  // Time to establish connection
+        connection.readTimeout = readTimeout       // Time to wait for response
+        
+        logger.lifecycle("Timeout configuration - Connect: ${connectTimeout}ms, Read: ${readTimeout}ms")
+        
         connection.setRequestProperty("Content-Type", "application/octet-stream")
         connection.setRequestProperty("Transfer-Encoding", "chunked")
         connection.setChunkedStreamingMode(BUFFER_SIZE)  // Enable chunked streaming

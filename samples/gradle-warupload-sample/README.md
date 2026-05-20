@@ -101,18 +101,43 @@ Server response: Application uploaded and configured successfully.
 
 ## Configuration Options
 
-| Property | Required | Description | Example |
-|----------|----------|-------------|---------|
-| `serverUrl` | Yes | Liberty server upload endpoint | `https://your-server:port/com.ibm.cics.wlp.appdeploy/uploadApp` |
-| `applicationXml` | Conditional** | Full Liberty `<application ...>` XML sent inline | `<application id="myapp" ...>` |
-| `applicationXmlLocation` | Conditional** | Path to a file containing Liberty `<application ...>` XML | `src/main/resources/application.xml` |
-| `userName` | Conditional* | Authentication username | `admin` |
-| `password` | Conditional* | Authentication password | `password` |
-| `bearerToken` | Conditional* | JWT Bearer token | `eyJhbGc...` |
-
+| Property | Required | Description | Default | Example |
+|----------|----------|-------------|---------|---------|
+| `serverUrl` | Yes | Liberty server upload endpoint | - | `https://your-server:port/com.ibm.cics.wlp.appdeploy/uploadApp` |
+| `applicationXml` | Conditional** | Full Liberty `<application ...>` XML sent inline | - | `<application id="myapp" ...>` |
+| `applicationXmlLocation` | Conditional** | Path to a file containing Liberty `<application ...>` XML | - | `src/main/resources/application.xml` |
+| `userName` | Conditional* | Authentication username | - | `admin` |
+| `password` | Conditional* | Authentication password | - | `password` |
+| `bearerToken` | Conditional* | JWT Bearer token | - | `eyJhbGc...` |
+| `connectTimeout` | No | Connection timeout in milliseconds | `30000` (30 seconds) | `60000` |
+| `readTimeout` | No | Read timeout in milliseconds | `300000` (5 minutes) | `600000` |
 
 *Either `userName`/`password` OR `bearerToken` must be provided.
 **Either `applicationXml` or `applicationXmlLocation` must be provided. If both are set, inline `applicationXml` takes precedence.
+
+### Timeout Configuration
+
+The WAR upload task supports configurable timeout settings to handle different network conditions and large file uploads:
+
+- **`connectTimeout`**: Time in milliseconds to wait for establishing a TCP connection to the Liberty server (default: 30000ms = 30 seconds)
+- **`readTimeout`**: Time in milliseconds to wait for the server response after sending the request (default: 300000ms = 5 minutes)
+
+These timeouts can be adjusted based on your network conditions and file sizes. For example, if uploading very large WAR files over slower networks, you may need to increase the `readTimeout`:
+
+```gradle
+cicsBundle {
+    libertyWarUpload {
+        serverUrl = 'https://your-server:port/com.ibm.cics.wlp.appdeploy/uploadApp'
+        userName = 'admin'
+        password = 'password'
+        applicationXml = '<application id="myapp" location="myapp.war" type="war"><context-root>/myapp</context-root></application>'
+        
+        // Increase timeouts for large files or slow networks
+        connectTimeout = 60000   // 60 seconds to establish connection
+        readTimeout = 600000     // 10 minutes to complete upload
+    }
+}
+```
 
 ## Troubleshooting
 
@@ -128,6 +153,8 @@ If you encounter SSL certificate errors, ensure your Java truststore includes th
 - Verify the server URL is correct and accessible
 - Check network connectivity and firewall rules
 - Ensure the Liberty server is running and the upload endpoint is enabled
+- For large files or slow networks, increase the `connectTimeout` and `readTimeout` values in your configuration
+- Default timeouts: `connectTimeout = 30000ms` (30 seconds), `readTimeout = 300000ms` (5 minutes)
 
 ## What's Next
 After successful upload, visit your application at:

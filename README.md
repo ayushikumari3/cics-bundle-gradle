@@ -244,6 +244,11 @@ cicsBundle {
         password = project.findProperty('cicsPassword') ?: ''
         // OR use JWT Bearer Token
         // bearerToken = project.findProperty('cicsToken') ?: ''
+        
+        // Optional: Time to establish connection in milliseconds
+        //connectTimeout = 60000
+        // Optional: Time to wait for response in milliseconds
+        //readTimeout = 60000
     }
 }
 ```
@@ -258,6 +263,11 @@ cicsBundle {
         password = project.findProperty('cicsPassword') ?: ''
         // OR use JWT Bearer Token
         // bearerToken = project.findProperty('cicsToken') ?: ''
+        
+        // Optional: Time to establish connection in milliseconds
+        //connectTimeout = 60000
+        // Optional: Time to wait for response in milliseconds
+        //readTimeout = 60000
     }
 }
 ```
@@ -290,14 +300,16 @@ The upload task will:
 
 ### Configuration Options
 
-| Property | Required | Description | Example |
-|----------|----------|-------------|---------|
-| `serverUrl` | Yes | Liberty server upload endpoint | `https://your-server:port/com.ibm.cics.wlp.appdeploy/uploadApp` |
-| `applicationXml` | Conditional** | Full Liberty `<application ...>` XML sent inline | `<application id="myapp" ...>` |
-| `applicationXmlLocation` | Conditional** | Path to a file containing Liberty `<application ...>` XML | `src/main/resources/application.xml` |
-| `userName` | Conditional* | Authentication username | `admin` |
-| `password` | Conditional* | Authentication password | `password` |
-| `bearerToken` | Conditional* | JWT Bearer token | `eyJhbGc...` |
+| Property | Required | Description | Default | Example |
+|----------|----------|-------------|---------|---------|
+| `serverUrl` | Yes | Liberty server upload endpoint | - | `https://your-server:port/com.ibm.cics.wlp.appdeploy/uploadApp` |
+| `applicationXml` | Conditional** | Full Liberty `<application ...>` XML sent inline | - | `<application id="myapp" ...>` |
+| `applicationXmlLocation` | Conditional** | Path to a file containing Liberty `<application ...>` XML | - | `src/main/resources/application.xml` |
+| `userName` | Conditional* | Authentication username | - | `admin` |
+| `password` | Conditional* | Authentication password | - | `password` |
+| `bearerToken` | Conditional* | JWT Bearer token | - | `eyJhbGc...` |
+| `connectTimeout` | No | Connection timeout in milliseconds | `30000` (30 seconds) | `60000` |
+| `readTimeout` | No | Read timeout in milliseconds | `300000` (5 minutes) | `600000` |
 
 *Either `userName`/`password` OR `bearerToken` must be provided.
 **Either `applicationXml` or `applicationXmlLocation` must be provided. If both are set, inline `applicationXml` takes precedence.

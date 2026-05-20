@@ -32,6 +32,11 @@ cicsBundle {
         // Inline XML takes precedence if both are supplied
         applicationXml = '<application id="standalone-warupload-demo" location="standalone-warupload-demo.war" type="war"><context-root>/standalone-warupload</context-root></application>'
         //applicationXmlLocation = 'src/main/resources/application.xml'
+        
+        // Time to establish connection in milliseconds
+        connectTimeout = 1000
+        // Time to wait for response in milliseconds
+        readTimeout = 5000
     }
 }
 
