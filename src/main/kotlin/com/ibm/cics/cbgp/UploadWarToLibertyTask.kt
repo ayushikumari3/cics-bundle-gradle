@@ -52,7 +52,6 @@ open class UploadWarToLibertyTask : DefaultTask() {
         // Validation error messages
         private const val MISSING_SERVER_URL = "Specify serverUrl for Liberty WAR upload"
         private const val MISSING_APPLICATION_XML = "Specify applicationXml or applicationXmlLocation for Liberty WAR upload"
-        private const val MISSING_AUTH = "Specify either userName/password for Basic Auth OR bearerToken for JWT authentication"
 
         private val UPLOAD_CONFIG_EXCEPTION = """
             Please specify Liberty WAR upload configuration in build.gradle.
@@ -60,7 +59,7 @@ open class UploadWarToLibertyTask : DefaultTask() {
             Example with Basic Authentication:
                 ${BundlePlugin.BUNDLE_EXTENSION_NAME} {
                     libertyWarUpload {
-                        serverUrl = 'http://localhost:9080/uploadApp'
+                        serverUrl = 'https://localhost:9080/com.ibm.cics.wlp.appdeploy/uploadApp'
                         applicationXmlLocation = 'src/main/resources/application.xml'
                         userName = 'username'
                         password = 'password'
@@ -70,9 +69,18 @@ open class UploadWarToLibertyTask : DefaultTask() {
             Example with JWT Token:
                 ${BundlePlugin.BUNDLE_EXTENSION_NAME} {
                     libertyWarUpload {
-                        serverUrl = 'http://localhost:9080/uploadApp'
+                        serverUrl = 'https://localhost:9080/com.ibm.cics.wlp.appdeploy/uploadApp'
                         applicationXml = '<application id="myapp" location="myapp.war" type="war"><context-root>/myapp</context-root></application>'
                         bearerToken = 'your-jwt-token'
+                    }
+                }
+            
+            Example with No Security (Development Only - requires SEC=NO on server):
+                ${BundlePlugin.BUNDLE_EXTENSION_NAME} {
+                    libertyWarUpload {
+                        serverUrl = 'http://localhost:9080/com.ibm.cics.wlp.appdeploy/uploadApp'
+                        applicationXmlLocation = 'src/main/resources/application.xml'
+                        // No userName, password, or bearerToken - sends request without authentication
                     }
                 }
             """.trimIndent()
@@ -296,6 +304,7 @@ open class UploadWarToLibertyTask : DefaultTask() {
 
     /**
      * Adds authentication header to connection (Basic Auth or Bearer Token).
+     * If no credentials are provided, no Authorization header is added.
      */
     private fun addBasicAuthentication(connection: HttpURLConnection) {
         when {
@@ -312,7 +321,8 @@ open class UploadWarToLibertyTask : DefaultTask() {
                 logger.lifecycle("Using Basic Authentication")
             }
             else -> {
-                logger.warn("No authentication credentials provided")
+                // No credentials provided - send request without authentication
+                logger.lifecycle("No authentication - sending request without Authorization header")
             }
         }
     }
@@ -370,16 +380,21 @@ open class UploadWarToLibertyTask : DefaultTask() {
             logger.warn("Both applicationXml and applicationXmlLocation provided. Inline applicationXml will be used.")
         }
 
-        // Validate authentication: either Basic Auth (userName + password) OR Bearer Token
+        // Authentication is optional - validate only if credentials are provided
         val hasBasicAuth = userName.isNotEmpty() && password.isNotEmpty()
         val hasBearerToken = bearerToken.isNotEmpty()
+        val hasPartialBasicAuth = (userName.isNotEmpty() && password.isEmpty()) || (userName.isEmpty() && password.isNotEmpty())
         
-        if (!hasBasicAuth && !hasBearerToken) {
-            errors.add(MISSING_AUTH)
+        if (hasPartialBasicAuth) {
+            errors.add("Both userName and password must be provided for Basic Authentication")
         }
         
         if (hasBasicAuth && hasBearerToken) {
             logger.warn("Both Basic Auth and Bearer Token provided. Bearer Token will be used.")
+        }
+        
+        if (!hasBasicAuth && !hasBearerToken) {
+            logger.warn("No authentication credentials provided. Request will be sent without authentication. Server must be configured with SEC=NO.")
         }
 
         if (errors.isNotEmpty()) {
