@@ -385,15 +385,20 @@ open class UploadWarToLibertyTask : DefaultTask() {
         val hasBearerToken = bearerToken.isNotEmpty()
         val hasPartialBasicAuth = (userName.isNotEmpty() && password.isEmpty()) || (userName.isEmpty() && password.isNotEmpty())
         
-        if (hasPartialBasicAuth) {
-            errors.add("Both userName and password must be provided for Basic Authentication")
+        // Only error on partial Basic Auth if there's no bearerToken (since bearerToken takes precedence)
+        if (hasPartialBasicAuth && !hasBearerToken) {
+            errors.add("Incomplete Basic Authentication. Provide both userName and password, or use bearerToken, or omit all credentials for no-security mode (SEC=NO).")
         }
         
         if (hasBasicAuth && hasBearerToken) {
             logger.warn("Both Basic Auth and Bearer Token provided. Bearer Token will be used.")
         }
         
-        if (!hasBasicAuth && !hasBearerToken) {
+        if (hasPartialBasicAuth && hasBearerToken) {
+            logger.warn("Partial Basic Auth credentials provided but will be ignored. Bearer Token will be used.")
+        }
+        
+        if (!hasBasicAuth && !hasBearerToken && !hasPartialBasicAuth) {
             logger.warn("No authentication credentials provided. Request will be sent without authentication. Server must be configured with SEC=NO.")
         }
 
