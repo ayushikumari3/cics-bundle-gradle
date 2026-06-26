@@ -3,7 +3,7 @@ This sample demonstrates how to upload a WAR file directly to a Liberty server e
 
 ## Key Features
 - Direct WAR upload to Liberty server (no CICS bundle required)
-- Raw `application/octet-stream` WAR upload with streaming
+- Multipart `multipart/form-data` WAR upload with streaming
 - Inline `applicationXml` sample configuration by default
 - Optional file-based `applicationXmlLocation` support
 - Automatic retry with exponential backoff
@@ -81,8 +81,8 @@ cicsBundle {
 The upload task will:
 1. Build the WAR file (if not already built)
 2. Resolve the Liberty `<application ...>` XML from inline configuration or a file
-3. Upload the WAR to the configured Liberty server endpoint as raw `application/octet-stream`
-4. Send `applicationXml` as a URL-encoded request parameter
+3. Upload the WAR to the configured Liberty server endpoint as a `multipart/form-data` request
+4. Send `applicationXml` as a named multipart text part (`text/xml`)
 5. Handle HTTP redirects automatically
 6. Retry on failure (up to 3 attempts)
 7. Display upload progress and server response

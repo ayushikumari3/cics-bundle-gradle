@@ -23,12 +23,11 @@ import java.io.FileInputStream
 import java.io.FileReader
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
 import java.util.Base64
 
 /**
- * Gradle task that uploads a WAR file to Liberty server using HTTP chunked transfer encoding.
- * Uses streaming to handle large files without loading entire file into memory.
+ * Gradle task that uploads a WAR file to Liberty server using multipart/form-data.
+ * Sends the WAR binary and applicationXml as separate named parts, streamed without loading into memory.
  */
 open class UploadWarToLibertyTask : DefaultTask() {
 
@@ -39,9 +38,6 @@ open class UploadWarToLibertyTask : DefaultTask() {
         
         // Buffer size for streaming file upload (8KB chunks)
         private const val BUFFER_SIZE = 8192
-        
-        // Progress logging threshold (log every 1MB uploaded)
-        private const val PROGRESS_LOG_INTERVAL_BYTES = 1024 * 1024L
         
         // HTTP redirect status codes
         private val REDIRECT_STATUS_CODES = setOf(301, 302, 303, 307, 308)
@@ -70,7 +66,9 @@ open class UploadWarToLibertyTask : DefaultTask() {
                 ${BundlePlugin.BUNDLE_EXTENSION_NAME} {
                     libertyWarUpload {
                         serverUrl = 'https://localhost:9080/com.ibm.cics.wlp.appdeploy/uploadApp'
-                        applicationXml = '<application id="myapp" location="myapp.war" type="war"><context-root>/myapp</context-root></application>'
+                        applicationXml = '<application id="myapp" location="myapp.war" type="war">
+<context-root>/myapp</context-root>
+</application>'
                         bearerToken = 'your-jwt-token'
                     }
                 }
@@ -187,70 +185,93 @@ open class UploadWarToLibertyTask : DefaultTask() {
     }
 
     /**
-     * Uploads WAR file using HTTP chunked transfer encoding with raw binary stream.
+     * Uploads WAR file using multipart/form-data with streaming.
      * Handles HTTP redirects manually for POST requests.
      */
     private fun uploadWarFile(war: File) {
-        val urlWithParams = buildUrlWithParams(serverUrl, resolveApplicationXml())
+        val boundary = "----WebKitFormBoundary" + System.currentTimeMillis()
+        val appXml = resolveApplicationXml()
         
-        var connection = createConnection(urlWithParams)
-        streamWarFile(connection, war)
-        
-        var responseCode = connection.responseCode
-        logger.lifecycle("Response: $responseCode - ${connection.responseMessage}")
-        
-        // Handle HTTP redirects manually for POST with body
-        if (responseCode in REDIRECT_STATUS_CODES) {
-            connection = handleRedirect(connection, war)
-            responseCode = connection.responseCode
-        }
-        
-        validateResponse(connection, responseCode)
-        logResponseBody(connection)
+        var connection = createConnection(serverUrl, boundary)
+	    writeMultipartBody(connection, boundary, appXml, war)
+	
+	    var responseCode = connection.responseCode
+	    logger.lifecycle("Response: $responseCode - ${connection.responseMessage}")
+	
+	    if (responseCode in REDIRECT_STATUS_CODES) {
+	        connection = handleRedirect(connection, boundary, appXml, war)
+	        responseCode = connection.responseCode
+	    }
+	
+	    validateResponse(connection, responseCode)
+	    logResponseBody(connection)
     }
 
     /**
-     * Streams WAR file content directly using chunked transfer encoding.
-     * Uses 8KB buffer to read and write file data efficiently.
-     */
-    private fun streamWarFile(connection: HttpURLConnection, war: File) {
-        connection.outputStream.use { outputStream ->
-            FileInputStream(war).use { fileInput ->
-                val buffer = ByteArray(BUFFER_SIZE)
-                var bytesRead: Int
-                var totalBytes = 0L
-                var lastLoggedMB = 0L
-                
-                while (fileInput.read(buffer).also { bytesRead = it } != -1) {
-                    outputStream.write(buffer, 0, bytesRead)
-                    totalBytes += bytesRead
-                    
-                    // Log progress every 100MB for large files
-                    val currentMB = totalBytes / (1024 * 1024)
-                    if (currentMB - lastLoggedMB >= 100) {
-                        logger.lifecycle("Uploaded: ${currentMB}MB")
-                        lastLoggedMB = currentMB
-                    }
-                }
-                
-                logger.lifecycle("Total uploaded: %.2f MB".format(totalBytes / (1024.0 * 1024.0)))
-            }
-        }
+	 * Writes the multipart/form-data body to the connection output stream.
+	 * Sends two parts: "applicationXml" (text/xml) and "warFile" (application/octet-stream).
+	 * Streams the WAR binary in 8KB chunks to avoid loading it into memory.
+	 */
+    private fun writeMultipartBody(connection: HttpURLConnection, boundary: String, appXml: String, war: File) {
+    
+	    connection.outputStream.use { out ->
+	    
+	    	// --- Part 1: applicationXml ---
+	        out.write("--$boundary\r\n".toByteArray())
+	        out.write("Content-Disposition: form-data; name=\"applicationXml\"\r\n".toByteArray())
+	        out.write("Content-Type: text/xml; charset=UTF-8\r\n".toByteArray())
+	        out.write("\r\n".toByteArray())
+	        out.write(appXml.toByteArray(Charsets.UTF_8))
+	        out.write("\r\n".toByteArray())
+	
+	        // --- Part 2: warFile ---
+	        out.write("--$boundary\r\n".toByteArray())
+	        out.write("Content-Disposition: form-data; name=\"warFile\"; filename=\"${war.name}\"\r\n".toByteArray())
+	        out.write("Content-Type: application/octet-stream\r\n".toByteArray())
+	        out.write("\r\n".toByteArray())
+	
+	        FileInputStream(war).use { fileInput ->
+	            val buffer = ByteArray(BUFFER_SIZE)
+	            var bytesRead: Int
+	            var totalBytes = 0L
+	            var lastLoggedMB = 0L
+	
+	            while (fileInput.read(buffer).also { bytesRead = it } != -1) {
+	                out.write(buffer, 0, bytesRead)
+	                totalBytes += bytesRead
+	
+	                val currentMB = totalBytes / (1024 * 1024)
+	                if (currentMB - lastLoggedMB >= 100) {
+	                    logger.lifecycle("Uploaded: ${currentMB}MB")
+	                    lastLoggedMB = currentMB
+	                }
+	            }
+	            logger.lifecycle("Total uploaded: %.2f MB".format(totalBytes / (1024.0 * 1024.0)))
+	        }
+	
+	       	out.write("\r\n".toByteArray())
+	
+	        out.write("--$boundary--\r\n".toByteArray())
+	       }
     }
-
+    
     /**
      * Handles HTTP redirect by creating new connection and re-uploading.
      */
-    private fun handleRedirect(originalConnection: HttpURLConnection, war: File): HttpURLConnection {
+    private fun handleRedirect(
+        originalConnection: HttpURLConnection,
+        boundary: String,
+        appXml: String,
+        war: File
+    ): HttpURLConnection {
         val redirectUrl = originalConnection.getHeaderField("Location")
             ?: throw GradleException("Redirect response missing Location header")
         
         logger.lifecycle("Following redirect to: $redirectUrl")
         originalConnection.disconnect()
         
-        val redirectUrlWithParams = buildUrlWithParams(redirectUrl, resolveApplicationXml())
-        val newConnection = createConnection(redirectUrlWithParams)
-        streamWarFile(newConnection, war)
+        val newConnection = createConnection(redirectUrl, boundary)
+    	writeMultipartBody(newConnection, boundary, appXml, war)
         
         logger.lifecycle("Redirect response: ${newConnection.responseCode} - ${newConnection.responseMessage}")
         return newConnection
@@ -266,22 +287,9 @@ open class UploadWarToLibertyTask : DefaultTask() {
     }
 
     /**
-     * Builds URL with query parameters for Liberty upload.
-     * If URL already contains applicationXml (from redirect), returns as-is.
-     */
-    private fun buildUrlWithParams(baseUrl: String, applicationXml: String): String {
-        if (baseUrl.contains("applicationXml=")) {
-            return baseUrl
-        }
-
-        val separator = if (baseUrl.contains("?")) "&" else "?"
-        return "$baseUrl$separator" + "applicationXml=${urlEncode(applicationXml)}"
-    }
-
-    /**
-     * Creates HTTP connection with chunked transfer encoding and authentication.
-     */
-    private fun createConnection(url: String): HttpURLConnection {
+	 * Creates HTTP connection configured for multipart/form-data upload with authentication.
+	 */
+    private fun createConnection(url: String, boundary: String): HttpURLConnection {
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.requestMethod = "POST"
         connection.doOutput = true
@@ -293,20 +301,18 @@ open class UploadWarToLibertyTask : DefaultTask() {
         
         logger.lifecycle("Timeout configuration - Connect: ${connectTimeout}ms, Read: ${readTimeout}ms")
         
-        connection.setRequestProperty("Content-Type", "application/octet-stream")
-        connection.setRequestProperty("Transfer-Encoding", "chunked")
-        connection.setChunkedStreamingMode(BUFFER_SIZE)  // Enable chunked streaming
+        connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
         
-        addBasicAuthentication(connection)
+        addAuthentication(connection)
         
         return connection
     }
-
+    
     /**
      * Adds authentication header to connection (Basic Auth or Bearer Token).
      * If no credentials are provided, no Authorization header is added.
      */
-    private fun addBasicAuthentication(connection: HttpURLConnection) {
+    private fun addAuthentication(connection: HttpURLConnection) {
         when {
             bearerToken.isNotEmpty() -> {
                 // Use JWT Bearer token
@@ -352,13 +358,6 @@ open class UploadWarToLibertyTask : DefaultTask() {
         } else {
             connection.responseMessage
         }
-    }
-
-    /**
-     * URL-encodes a string value.
-     */
-    private fun urlEncode(value: String): String {
-        return URLEncoder.encode(value, "UTF-8")
     }
 
     /**
@@ -441,5 +440,3 @@ open class UploadWarToLibertyTask : DefaultTask() {
         return xml.toString().trim()
     }
 }
-
-// Made with Bob

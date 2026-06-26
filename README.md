@@ -222,7 +222,7 @@ The CICS bundle Gradle plugin provides a task to upload WAR files directly to a 
 - Valid credentials (username/password or JWT Bearer token) with appropriate permissions
 - Liberty upload endpoint and caller-supplied `<application ...>` XML
 
-**Note:** The upload uses HTTP chunked transfer encoding, which allows uploading WAR files of any size. Files are streamed in 8KB chunks to avoid loading the entire file into memory.
+**Note:** The upload uses `multipart/form-data` encoding, sending the WAR binary and `applicationXml` as separate named parts. Files are streamed in 8KB chunks to avoid loading the entire file into memory.
 
 ### Configure WAR Upload
 
@@ -291,8 +291,8 @@ Or pass credentials via command line:
 The upload task will:
 - Build the WAR file (if not already built)
 - Resolve Liberty `<application ...>` XML from inline configuration or a file
-- Upload the WAR to the configured Liberty server endpoint using HTTP chunked transfer encoding
-- Send `applicationXml` as a URL-encoded request parameter
+- Upload the WAR to the configured Liberty server endpoint as a `multipart/form-data` request
+- Send `applicationXml` as a named multipart text part (`text/xml`)
 - Display upload progress every 100MB for large files
 - Handle HTTP redirects automatically
 - Retry on failure (up to 3 attempts with exponential backoff)
