@@ -68,18 +68,22 @@ cicsBundle {
 
 ## Building and Uploading
 
-### Build the WAR file
-```bash
-./gradlew build
-```
+> **Note:** You do not need to run `build` or `war` separately first.
+> `uploadWarToLiberty` automatically depends on the `war` task — Gradle builds
+> the WAR and uploads it in a single command.
 
 ### Upload WAR to Liberty
 ```bash
 ./gradlew uploadWarToLiberty
 ```
 
+Only run `clean` if you want to force a full rebuild from scratch:
+```bash
+./gradlew clean uploadWarToLiberty
+```
+
 The upload task will:
-1. Build the WAR file (if not already built)
+1. Automatically build the WAR via the `war` task (no separate build step needed)
 2. Resolve the Liberty `<application ...>` XML from inline configuration or a file
 3. Upload the WAR to the configured Liberty server endpoint as a `multipart/form-data` request
 4. Send `applicationXml` as a named multipart text part (`text/xml`)
@@ -163,6 +167,13 @@ cicsBundle {
 - Use plain HTTP (not HTTPS) for simplicity.
 
 ## Troubleshooting
+
+### Wrong file type uploaded
+If the `warFile` property points to a non-WAR file (e.g. a JAR or ZIP), the task fails before connecting to the server:
+```
+Unsupported file type: .jar. Only .war files are accepted
+```
+Ensure your project applies the `war` plugin (not just `java`) so Gradle produces a `.war` artifact.
 
 ### SSL Certificate Errors
 If you encounter SSL certificate errors, ensure your Java truststore includes the Liberty server's certificate. For development/testing only, you can disable SSL verification (not recommended for production).

@@ -73,7 +73,8 @@ class BundlePlugin : Plugin<Project> {
 
 		// Define upload WAR to Liberty task
 		val uploadWarTaskProvider = project.tasks.register(UPLOAD_WAR_TASK_NAME, UploadWarToLibertyTask::class.java) {
-		    this.description = "Uploads a WAR file directly to a Liberty server endpoint."
+		    this.description = "Builds and uploads a WAR file directly to a Liberty server endpoint. " +
+		        "Automatically runs the 'war' task first — no separate build step needed."
 		    this.group = "upload"
 		}
 		
