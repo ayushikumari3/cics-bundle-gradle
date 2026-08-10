@@ -141,12 +141,16 @@ open class UploadWarToLibertyTask : DefaultTask() {
     }
 
     /**
-     * Validates that the WAR file exists and is readable.
+     * Validates that the WAR file exists and has a .war extension.
      */
     private fun validateWarFile(): File {
         val war = warFile.get().asFile
         if (!war.exists()) {
-            throw GradleException("WAR file does not exist: '${war.absolutePath}'")
+            throw GradleException("No artifact file found. Run 'gradle build' before 'gradle uploadWarToLiberty'")
+        }
+        if (!war.name.toLowerCase().endsWith(".war")) {
+            val ext = if (war.name.contains(".")) war.name.substring(war.name.lastIndexOf('.')) else "(no extension)"
+            throw GradleException("Unsupported file type: $ext. Only .war files are accepted")
         }
         return war
     }
