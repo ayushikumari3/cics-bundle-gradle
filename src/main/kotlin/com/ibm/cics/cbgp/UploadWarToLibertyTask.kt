@@ -39,9 +39,6 @@ open class UploadWarToLibertyTask : DefaultTask() {
         // Buffer size for streaming file upload (8KB chunks)
         private const val BUFFER_SIZE = 8192
         
-        // HTTP redirect status codes
-        private val REDIRECT_STATUS_CODES = setOf(301, 302, 303, 307, 308)
-        
         // HTTP success status codes
         private val SUCCESS_STATUS_CODES = setOf(200, 201)
         
@@ -76,7 +73,7 @@ open class UploadWarToLibertyTask : DefaultTask() {
             Example with No Security (Development Only - requires SEC=NO on server):
                 ${BundlePlugin.BUNDLE_EXTENSION_NAME} {
                     libertyWarUpload {
-                        serverUrl = 'http://localhost:9080/com.ibm.cics.wlp.appdeploy/uploadApp'
+                        serverUrl = 'https://localhost:9080/com.ibm.cics.wlp.appdeploy/uploadApp'
                         applicationXmlLocation = 'src/main/resources/application.xml'
                         // No userName, password, or bearerToken - sends request without authentication
                     }
@@ -190,22 +187,16 @@ open class UploadWarToLibertyTask : DefaultTask() {
 
     /**
      * Uploads WAR file using multipart/form-data with streaming.
-     * Handles HTTP redirects manually for POST requests.
      */
     private fun uploadWarFile(war: File) {
         val boundary = "----WebKitFormBoundary" + System.currentTimeMillis()
         val appXml = resolveApplicationXml()
         
-        var connection = createConnection(serverUrl, boundary)
+        val connection = createConnection(serverUrl, boundary)
 	    writeMultipartBody(connection, boundary, appXml, war)
 	
-	    var responseCode = connection.responseCode
+	    val responseCode = connection.responseCode
 	    logger.lifecycle("Response: $responseCode - ${connection.responseMessage}")
-	
-	    if (responseCode in REDIRECT_STATUS_CODES) {
-	        connection = handleRedirect(connection, boundary, appXml, war)
-	        responseCode = connection.responseCode
-	    }
 	
 	    validateResponse(connection, responseCode)
 	    logResponseBody(connection)
@@ -260,28 +251,6 @@ open class UploadWarToLibertyTask : DefaultTask() {
     }
     
     /**
-     * Handles HTTP redirect by creating new connection and re-uploading.
-     */
-    private fun handleRedirect(
-        originalConnection: HttpURLConnection,
-        boundary: String,
-        appXml: String,
-        war: File
-    ): HttpURLConnection {
-        val redirectUrl = originalConnection.getHeaderField("Location")
-            ?: throw GradleException("Redirect response missing Location header")
-        
-        logger.lifecycle("Following redirect to: $redirectUrl")
-        originalConnection.disconnect()
-        
-        val newConnection = createConnection(redirectUrl, boundary)
-    	writeMultipartBody(newConnection, boundary, appXml, war)
-        
-        logger.lifecycle("Redirect response: ${newConnection.responseCode} - ${newConnection.responseMessage}")
-        return newConnection
-    }
-
-    /**
      * Validates the HTTP response code.
      */
     private fun validateResponse(connection: HttpURLConnection, responseCode: Int) {
@@ -297,7 +266,7 @@ open class UploadWarToLibertyTask : DefaultTask() {
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.requestMethod = "POST"
         connection.doOutput = true
-        connection.instanceFollowRedirects = false  // Handle redirects manually for POST
+        connection.instanceFollowRedirects = false  // Never resend credentials and the WAR to another URL
         
         // Set timeout configurations
         connection.connectTimeout = connectTimeout  // Time to establish connection

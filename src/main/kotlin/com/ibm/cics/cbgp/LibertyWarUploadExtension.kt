@@ -19,7 +19,7 @@ package com.ibm.cics.cbgp
  */
 open class LibertyWarUploadExtension {
     /**
-     * Liberty server endpoint URL (e.g., "http://localhost:9080/uploadApp")
+     * Liberty server endpoint URL (e.g., "https://localhost:9080/uploadApp")
      */
     var serverUrl = ""
     

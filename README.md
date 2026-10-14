@@ -218,7 +218,7 @@ The CICS bundle Gradle plugin provides a task to upload WAR files directly to a 
 ### Prerequisites for WAR Upload
 
 - Liberty server with WAR upload feature enabled and configured
-- Liberty server URL endpoint (e.g., `http://server:port/com.ibm.cics.wlp.appdeploy/uploadApp`)
+- Liberty server URL endpoint (e.g., `https://server:port/com.ibm.cics.wlp.appdeploy/uploadApp`)
 - Valid credentials (username/password or JWT Bearer token) with appropriate permissions
 - Liberty upload endpoint and caller-supplied `<application ...>` XML
 
@@ -294,7 +294,6 @@ The upload task will:
 - Upload the WAR to the configured Liberty server endpoint as a `multipart/form-data` request
 - Send `applicationXml` as a named multipart text part (`text/xml`)
 - Display upload progress every 100MB for large files
-- Handle HTTP redirects automatically
 - Retry on failure (up to 3 attempts with exponential backoff)
 - Display server response
 

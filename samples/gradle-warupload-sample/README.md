@@ -7,7 +7,6 @@ This sample demonstrates how to upload a WAR file directly to a Liberty server e
 - Inline `applicationXml` sample configuration by default
 - Optional file-based `applicationXmlLocation` support
 - Automatic retry with exponential backoff
-- HTTP redirect handling
 - Basic authentication or JWT Bearer token support
 - Progress logging
 
@@ -87,9 +86,8 @@ The upload task will:
 2. Resolve the Liberty `<application ...>` XML from inline configuration or a file
 3. Upload the WAR to the configured Liberty server endpoint as a `multipart/form-data` request
 4. Send `applicationXml` as a named multipart text part (`text/xml`)
-5. Handle HTTP redirects automatically
-6. Retry on failure (up to 3 attempts)
-7. Display upload progress and server response
+5. Retry on failure (up to 3 attempts)
+6. Display upload progress and server response
 
 ### Example Output
 ```
@@ -150,7 +148,7 @@ For development environments where the CICS server is configured with `SEC=NO` a
 ```gradle
 cicsBundle {
     libertyWarUpload {
-        serverUrl = 'http://localhost:9080/com.ibm.cics.wlp.appdeploy/uploadApp'
+        serverUrl = 'https://localhost:9080/com.ibm.cics.wlp.appdeploy/uploadApp'
         applicationXml = '<application id="myapp" location="myapp.war" type="war"><context-root>/myapp</context-root></application>'
         // No userName, password, or bearerToken - request sent without authentication
         
