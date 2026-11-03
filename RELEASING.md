@@ -17,7 +17,7 @@ This repository contains two Gradle plugins, `com.ibm.cics.bundle` and `com.ibm.
 
 2. **Review and merge the PR** — merging triggers the existing build and publish via `gradle-build.yml`, which runs `./gradlew build publishAll` on `main`.
 
-3. **Publish to Maven Central and the Gradle Plugin Portal** — for a release (non-SNAPSHOT) version, `publishAll` publishes to both automatically: Maven Central through JReleaser (`jreleaserFullRelease`) and the Gradle Plugin Portal through `publishPlugins`. `build.gradle.kts` does not set a JReleaser `stage`, and in JReleaser 1.25.0 an unset stage becomes `FULL` (upload and publish), so this build has no manual publish step on central.sonatype.com. This was read from the JReleaser 1.25.0 jars and has not been confirmed by a real release. For a `-SNAPSHOT` version `publishAll` only publishes to the local `build/staging-deploy` directory.
+3. **Publish to Maven Central and the Gradle Plugin Portal** — for a release (non-SNAPSHOT) version, `publishAll` also runs `jreleaserFullRelease` (JReleaser, configured in the `jreleaser` block of `build.gradle.kts` to deploy to Maven Central from `build/staging-deploy`) and `publishPlugins` (Gradle Plugin Portal). For a `-SNAPSHOT` version it only publishes to the local `build/staging-deploy` directory. The JReleaser `stage` is not set in `build.gradle.kts`. After a release, check that the new version appears on Maven Central and the Plugin Portal. If it is staged but not published on central.sonatype.com, publish it there as for the Maven plugins.
 
 4. **Automation takes over** — `post-release.yml` runs when `build.gradle.kts` changes on `main` and the version is not a SNAPSHOT. It:
    - Computes the next patch SNAPSHOT (e.g. `1.0.14` → `1.0.15-SNAPSHOT`)
